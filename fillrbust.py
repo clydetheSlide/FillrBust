@@ -274,7 +274,7 @@ class AIPlayer(Player):
                 dprint+=' roll risk is',rprob
                 if debug:
                     print(' prob of scoring with %d dice is %f'%(rtype['ndice'],rprob))
-            if rtype['name'] is not 'vengeance':
+            if rtype['name'] != 'vengeance':
                 # factor in the points at risk
                 # linear such that r(0)=10, r(1000)=0
                 pprob=max(0.,10.-rtype['score']*.01)
@@ -467,6 +467,7 @@ diceRegions.append(DiceRegion(3,  0.690, 0.251,    0.864, 0.099))
 diceRegions.append(DiceRegion(4,  0.158, 0.161,    0.365, 0.006))
 diceRegions.append(DiceRegion(5,  0.415, 0.223,    0.644, 0.012))
 diceRegions.append(DiceRegion(6,  0.139, 0.619,    0.390, 0.378))
+
 class App:
     #def __init__(self, master,names=[],goal=0, scores=[], current=""):
     def __init__(self, master,names=[],config=None, scores=[], current=""):
@@ -2245,7 +2246,8 @@ class Config:
         self.dicedir="Dice/POV"
         self.carddir="Cards/Orig"
         self.fontsize=11
-        self.POV=True
+        #self.POV=True
+        self.POV=False
     def readRC(self,rcFile):
         for line in rcFile:
             sline=line.strip().split()
@@ -2316,8 +2318,10 @@ if __name__ == '__main__':
         print('    -t		don\'t use graphical user interface')
         print('    -D dir       find dice images in Dice/dir')
         print('    -C dir      	find card images in Cards/dir')
+        #print('    -P		don\'t render dice with POVray')
+        print('    -P		render dice with POVray')
+        #print('    -s		speak the instructions')
         print('    -R		don\'t use config file')
-        print('    -P		don\'t render dice with POVray')
 
     def check_response(response):
         ''' response to set of dice to keep should be a set of integers
