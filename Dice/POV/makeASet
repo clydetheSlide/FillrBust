@@ -1,0 +1,44 @@
+# makeASet zipname
+# make a set of dice
+
+if ($# != 1) then
+  echo You must tell me a name for the zip file
+  exit(1)
+endif
+# none
+povray +H64 +W64 +A +K18 ../dice.pov
+convert ../dice.png undieb.gif
+povray +H64 +W64 +A +K0 ../dice.pov
+convert ../dice.png undie.gif
+# one
+povray +H64 +W64 +A +K7 ../dice.pov
+convert ../dice.png oneb.gif
+povray +H64 +W64 +A +K1 ../dice.pov
+convert ../dice.png one.gif
+# two
+povray +H64 +W64 +A +K8 ../dice.pov
+convert ../dice.png twob.gif
+povray +H64 +W64 +A +K2 ../dice.pov
+convert ../dice.png two.gif
+# three
+povray +H64 +W64 +A +K9 ../dice.pov
+convert ../dice.png threeb.gif
+povray +H64 +W64 +A +K3 ../dice.pov
+convert ../dice.png three.gif
+# four
+povray +H64 +W64 +A +K10 ../dice.pov
+convert ../dice.png fourb.gif
+povray +H64 +W64 +A +K4 ../dice.pov
+convert ../dice.png four.gif
+# five
+povray +H64 +W64 +A +K11 ../dice.pov
+convert ../dice.png fiveb.gif
+povray +H64 +W64 +A +K5 ../dice.pov
+convert ../dice.png five.gif
+# six
+povray +H64 +W64 +A +K12 ../dice.pov
+convert ../dice.png sixb.gif
+povray +H64 +W64 +A +K6 ../dice.pov
+convert ../dice.png six.gif
+
+zip $1 *.gif

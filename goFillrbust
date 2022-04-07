@@ -1,2 +1,2 @@
-cd $HOME/FillRBust/Python3
-python3 ./fillrbust.py -m 5000 -p Clyde -p aiNancy4 -D Medium -C Big
+cd $HOME/FillRBust
+./fillrbust.py

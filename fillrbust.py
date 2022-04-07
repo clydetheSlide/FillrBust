@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ play Fill 'R Bust"""
 # fillrbust.py
 # encode the rules for fillrbust
@@ -45,6 +45,19 @@
 #    FIX new game after end
 #       - dont remember previous score and add it to first score of new game
 #       - fixed
+#  v3.6 - July 13, 2021
+#    draw dice nicer
+#       o draw thrown dice in a group other than a (boring) row
+#           - implemented with POVray
+#           - set size of dice group to fit card size
+#       o update rendered dice based on selections
+#  v4.0 - Mar27, 2022
+#    Use config file to set parameters
+#       o max score, Cards, Dice, players
+#       o command line params override config file
+#       o look in home directory for config file
+#    Change font size of user scores along with instructions
+#    if table dice image option not chosen, don't make canvas for it
 #  dev:
 #  TODO:
 #    FIX ai play when aiName is first player
@@ -60,6 +73,7 @@
 #    draw dice nicer
 #       o group retained dice seperately
 #       o draw thrown dice in a group other than a (boring) row
+#    change Card and Dice image family on the fly
 
 import random
 from collections import OrderedDict
@@ -71,7 +85,7 @@ import subprocess
 
 about='    fillrbust.py\n \
 A computer controlled version of Fill\'RBust\n\n \
-    version 3.5'
+    version 4.0'
 therules='see official rules from Bowman Games Inc: instr.pdf\n \
 Fill\'RBust uses six standard cubic dice and 54 cards (as described below)\n \
 It is turn based.\n \
@@ -186,6 +200,19 @@ Prepending \'ai\' to a name makes that player computer controlled. \
 A number at the end of an ai player name indicates the risk that player will accept for decisions \
 such as whether to roll again, take vengeance, or continue after a FILL. Default value is 5. \
 Right click allows name change. ERROR ALERT: can\'t change player from real to AI.'
+rcFileHelp='Save several game and display parameters to a configuration file, ~/.fillrbustrc.\n\n \
+Options that are defined are:\n \
+   winning score, \
+   player names,\n \
+   font size,\n \
+   directory for dice images, \
+   directory for card images,\n \
+   switch to use GUI, \
+   switch to use speech.\n \
+Command line options override those in the config file.'
+saveHelp='You can save a game to finish it later.\n\n \
+ The game state is saved to a file named \'resume.FrB\'\n \
+ The command option to resume a saved game is -r filename.\n\n'
 quitHelp=' Doh! It quits; goes away; exits; beats a hasty retreat, makes like a tree and leaves, makes like a buffalo turd and hits the dusty trail.\n\nWhich part of quit don\'t you understand?'
 helpHelp='Obviously you found that \'specific\' help describes individual buttons.\n \
 \'Rules\' describes the rules of the game.\n \
@@ -387,6 +414,12 @@ class Dice:
         #print('reserve ',dstr)
         for each in dstr:
             self.reserved.append(int(each))
+    def rlist2str(self):
+        ''' return a string with the list of recently rolled dice'''
+        rlist=""
+        for each in self.dice[:6-len(self.reserved)]:
+            rlist+='%d'%each
+        return rlist
     def scored(self, dlist):
         ''' Return the score
             and the portion of list that scores'''
@@ -418,16 +451,34 @@ class Dice:
                     plist.append(index+ind)
         return score,used,plist
 
+class DiceRegion:
+    ''' define regions in the picture to look for dice'''
+    def __init__(self,num, xlo,yhi, xhi,ylo):
+        self.num=num
+        self.xlo=xlo
+        self.xhi=xhi
+        self.ylo=ylo
+        self.yhi=yhi
+# define a region for each of the six dice
+diceRegions=[]
+diceRegions.append(DiceRegion(1,  0.576, 0.712,    0.783, 0.483))
+diceRegions.append(DiceRegion(2,  0.458, 0.452,    0.690, 0.248))
+diceRegions.append(DiceRegion(3,  0.690, 0.251,    0.864, 0.099))
+diceRegions.append(DiceRegion(4,  0.158, 0.161,    0.365, 0.006))
+diceRegions.append(DiceRegion(5,  0.415, 0.223,    0.644, 0.012))
+diceRegions.append(DiceRegion(6,  0.139, 0.619,    0.390, 0.378))
 class App:
-    def __init__(self, master,names=[],goal=0, scores=[], current=""):
+    #def __init__(self, master,names=[],goal=0, scores=[], current=""):
+    def __init__(self, master,names=[],config=None, scores=[], current=""):
         ''' init process is to set the goal score and the players'''
         self.master=master
-        if len(names)==0 or goal==0:
-            self.suf=self.mkAddPlayer(self.master,names)
+        if config == None: config=Config()
+        if len(names)==0 or config.goal==0:
+            self.suf=self.mkAddPlayer(self.master,names,config.goal)
         else:
-            self.startplay(names,goal,scores,current)
+            self.startplay(names,config.goal,scores,current)
         self.master.bind('<Key-d>', self.setDebug)
-    def mkAddPlayer(self,master,names=[]):
+    def mkAddPlayer(self,master,names=[],goal=0):
         ''' GUI to add a player and/or set winning score'''
         suf=Ttk.Frame(master)
         suf.pack()
@@ -436,6 +487,7 @@ class App:
         self.labels=Ttk.Label(self.a1,text='Set winning score:')
         self.scoreg=Ttk.StringVar()
         entrgoal=Ttk.Entry(self.a1,textvariable=self.scoreg)
+        self.scoreg.set(goal)
         self.labels.pack(side=Ttk.LEFT)
         entrgoal.pack(side=Ttk.LEFT)
         labelp=Ttk.Label(self.b1,text='add a player:')
@@ -490,12 +542,12 @@ class App:
         deck=Cards(cards)
         state=DRAWCARD
         a1 = Ttk.Frame(master, bg='black')
-        b1 = Ttk.Frame(master,height=80)
+        b1 = Ttk.Frame(master,height=80)    # only thing in b1 will be scrolling instructions
         a1.pack(side=Ttk.TOP)
         b1.pack(side=Ttk.TOP,fill=Ttk.BOTH,expand=True)
 
-        a2 = Ttk.Frame(a1, bg='black')
-        b2 = Ttk.Frame(a1)
+        a2 = Ttk.Frame(a1, bg='black')  # contains the game state, ie cards, dice
+        b2 = Ttk.Frame(a1)              # contains the state of the competition, ie players
         a2.pack(side=Ttk.LEFT)
         b2.pack(side=Ttk.LEFT)
 
@@ -521,6 +573,7 @@ class App:
         self.gamemenu.add_command(label='New Player', command=self.addplayerGui)
         self.gamemenu.add_command(label='Winning Score', command=self.resetgoal)
         self.gamemenu.add_command(label='Save Game', command=self.savegame)
+        self.gamemenu.add_command(label='Write RC file', command=self.writeConfig)
         self.gamemenu.add_command(label='Quit', command=sys.exit)
         gamemenub.configure(menu=self.gamemenu)
         self.helpmenu=Ttk.Menu(helpmenub,tearoff=0)
@@ -546,23 +599,33 @@ class App:
         #for num in range(1,7):
         for num,name in nums:
             #self.flagsup.append(Ttk.PhotoImage(file='%s.gif'%nums[num]))
-            self.flagsup.append(Ttk.PhotoImage(file='%s/%s.gif'%(dicedir,name)))
-            self.flagdown.append(Ttk.PhotoImage(file='%s/%sb.gif'%(dicedir,name)))
+            self.flagsup.append(Ttk.PhotoImage(file='%s/%s.gif'%(config.dicedir,name)))
+            self.flagdown.append(Ttk.PhotoImage(file='%s/%sb.gif'%(config.dicedir,name)))
         self.diceb=[Die(self) for ii in range(6)]
 
         # show card
         self.cardimage={}
-        self.cardimage['title'         ]=Ttk.PhotoImage(file='%s/title.gif'%carddir)
-        self.cardimage['Must Bust'     ]=Ttk.PhotoImage(file='%s/mustbust.gif'%carddir)
-        self.cardimage['Bonus 500'     ]=Ttk.PhotoImage(file='%s/bonus500.gif'%carddir)
-        self.cardimage['Bonus 400'     ]=Ttk.PhotoImage(file='%s/bonus400.gif'%carddir)
-        self.cardimage['Bonus 300'     ]=Ttk.PhotoImage(file='%s/bonus300.gif'%carddir)
-        self.cardimage['Fill 1000'     ]=Ttk.PhotoImage(file='%s/fill1000.gif'%carddir)
-        self.cardimage['Vengeance'     ]=Ttk.PhotoImage(file='%s/vengeance.gif'%carddir)
-        self.cardimage['No Dice'       ]=Ttk.PhotoImage(file='%s/nodice.gif'%carddir)
-        self.cardimage['Double Trouble']=Ttk.PhotoImage(file='%s/doubletrouble.gif'%carddir)
-        self.card=Ttk.Button(self.cardframe,image=self.cardimage['title'],command=self.drawcard,highlightcolor='black',highlightbackground='black',bd=0)
-        self.card.pack()
+        self.cardimage['title'         ]=Ttk.PhotoImage(file='%s/title.gif'%config.carddir)
+        self.cardimage['Must Bust'     ]=Ttk.PhotoImage(file='%s/mustbust.gif'%config.carddir)
+        self.cardimage['Bonus 500'     ]=Ttk.PhotoImage(file='%s/bonus500.gif'%config.carddir)
+        self.cardimage['Bonus 400'     ]=Ttk.PhotoImage(file='%s/bonus400.gif'%config.carddir)
+        self.cardimage['Bonus 300'     ]=Ttk.PhotoImage(file='%s/bonus300.gif'%config.carddir)
+        self.cardimage['Fill 1000'     ]=Ttk.PhotoImage(file='%s/fill1000.gif'%config.carddir)
+        self.cardimage['Vengeance'     ]=Ttk.PhotoImage(file='%s/vengeance.gif'%config.carddir)
+        self.cardimage['No Dice'       ]=Ttk.PhotoImage(file='%s/nodice.gif'%config.carddir)
+        self.cardimage['Double Trouble']=Ttk.PhotoImage(file='%s/doubletrouble.gif'%config.carddir)
+        if config.POV:
+            self.cardimage['table'         ]=Ttk.PhotoImage(file='tableDice.gif')
+        self.card=Ttk.Button(self.cardframe,image=self.cardimage['title'], \
+                command=self.drawcard, \
+                highlightcolor='black',highlightbackground='black',bd=0)
+        self.card.pack(side=Ttk.RIGHT,anchor='w',padx=10)
+        if config.POV:
+            #self.table=Ttk.Label(self.cardframe,image=self.cardimage['table'])
+            self.table=Ttk.Canvas(self.cardframe, bg='black', width=dtw*4/3 +4, height=dtw+4)
+            self.table.pack(side=Ttk.RIGHT,anchor='e')
+            self.tablim=self.table.create_image(0,0, image=self.cardimage['table'],anchor='nw')
+            self.table.bind('<Button 1>', self.selectDice)
 
         # show options
         self.options=(Ttk.Button(self.optionsframe,text='option1'),Ttk.Button(self.optionsframe,text='option2'))
@@ -608,7 +671,8 @@ class App:
         self.leadingPlayers=deepcopy(self.names)
 
         # show instructions
-        self.iFont=10
+        #self.iFont=10
+        self.iFont=config.fontsize
         self.instructionbox=ScrolledText(b1,height=8,wrap=Ttk.WORD, font=('Times',self.iFont))
         self.instructionbox.pack(fill=Ttk.BOTH, expand=1)
         self.instructionbox.insert(Ttk.END, "Hey %s, It is your turn."%self.player)
@@ -627,15 +691,41 @@ class App:
             self.pui[each].total.set('0')
         self.maxScore=0
 
+    def selectDice(self,event):
+        if debug: print ('%5.3f, %5.3f'%(float(event.x)/dtw,float(event.y)/dtw))
+        # check in each region if it was selected
+        #only look in regioins where there is one, ie 
+        num=0
+        for each in diceRegions[:6-len(dice.reserved)]:
+            if debug: print('Is %d in region [%d,%d]'%(event.x,each.xlo*dtw,each.xhi*dtw))
+            if debug: print('Is %d in region [%d,%d]'%(event.y,each.ylo*dtw,each.yhi*dtw))
+            if event.x < each.xhi*dtw*1.333 and \
+               event.x > each.xlo*dtw*1.333 and \
+               event.y < each.yhi*dtw*1.333 and \
+               event.y > each.ylo*dtw*1.333 :
+                   num=each.num
+                   #print('selected die %d'%num)
+                   break
+        print('selected die %d'%num)
+        #NOW What
+        # toggle the Die
+        self.diceb[6-len(dice.reserved)-num].toggle()
+        # call command associated with the dice
+        self.scoreDie(6-len(dice.reserved)-num)
     def fontUp(self,event):
         self.iFont+=1
         self.iFont=min(25,self.iFont)
-        self.instructionbox.configure(font=('Times',self.iFont))
+        #self.instructionbox.configure(font=('Times',self.iFont))
+        self.instructionbox.configure(font=('DejaVu Sans',self.iFont))
+        for each in self.names:
+            self.pui[each].fontSize(self.iFont)
 
     def fontDn(self,event):
         self.iFont-=1
         self.iFont=max(4,self.iFont)
         self.instructionbox.configure(font=('Times',self.iFont))
+        for each in self.names:
+            self.pui[each].fontSize(self.iFont)
 
     def say_hi(self):
         print("hi there, everyone! %s"%self.player)
@@ -790,7 +880,7 @@ class App:
         #print('picked in getdice: ',picked)
         return picked
 
-    def scoreDie(self):
+    def scoreDie(self,fromRender=-1):
         '''get the values of the selected dice
            and determine their score'''
         global pscore, dice, preserve
@@ -807,10 +897,15 @@ class App:
             self.updatedice(dice.dice,dice.reserved,dummy)
         self.pscore.set('% 4d'%pscore)
         #print('scoreDie NOTDONE')
+        if config.POV:
+            seeTableDice("".join(list(['%d'%si for si in dice.dice[:6-len(dice.reserved)]])),dlist)
+            self.cardimage['table']=Ttk.PhotoImage(file='tableDice.gif')
+            self.table.itemconfig(self.tablim,image=self.cardimage['table'])
 
     def updatedice(self,rolled,reserved=[],dlist=[]):
         '''revise dice buttons per roll results and choice to score'''
         global dice, card
+        # draw all the dice
         for each in range(len(rolled)):
             self.diceb[each].button.configure(image=self.flagdown[rolled[each]], \
                 selectimage=self.flagsup[rolled[each]], \
@@ -820,7 +915,11 @@ class App:
             self.diceb[each].button.deselect()
             if card == 'Must Bust':
                 self.diceb[each].button.configure(command=self.donothing)
+        #seeTableDice("".join(list(['%d'%si for si in rolled[:6-len(reserved)]])))
+	#self.cardimage['table']=Ttk.PhotoImage(file='tableDice.gif')
+        #self.table.itemconfig(self.tablim,image=self.cardimage['table'])
         for each in dlist:
+            #selstr.append
             self.diceb[each].button.select()
             if card == 'Must Bust':
                 self.diceb[each].button.configure(image=self.flagsup[rolled[each]])
@@ -829,6 +928,10 @@ class App:
             self.diceb[each+enrolled].button.configure(image=self.flagsup[reserved[each]], \
             selectimage=self.flagsup[reserved[each]], indicatoron=0, relief=Ttk.SUNKEN, \
             bd=5,highlightbackground='red',command=self.donothing)
+            if config.POV:
+                seeTableDice("".join(list(['%d'%si for si in rolled[:6-len(reserved)]])),dlist)
+                self.cardimage['table']=Ttk.PhotoImage(file='tableDice.gif')
+                self.table.itemconfig(self.tablim,image=self.cardimage['table'])
 
     def drawcard(self):
         global state,deck,card,gtesting
@@ -849,8 +952,9 @@ class App:
                 self.setoptions()
 
     def takeVengeance(self):
-        global state,speak
-        if speak:
+        #global state,speak
+        global state
+        if config.speak:
             line='Look out '
             for each in self.leadingPlayers:
                 line+= '%s '%each
@@ -912,7 +1016,7 @@ class App:
                 ,command=self.rollDice, state='normal')
 
     def deRoll(self):
-        ''' Show dice as not rolled'''
+        ''' Show dice as not rollable'''
         for die in self.diceb:
             die.button.configure(relief=Ttk.SUNKEN, bd=0 \
                 #, selectimage=self.flagsup[0], image=self.flagsup[0] \
@@ -929,7 +1033,8 @@ class App:
 
     def setoptions(self):	#{
         '''Set the commands to be bound to the option buttons
-           based on the current state, the card, and the dice'''
+	   based on the current state, the card, and the dice.
+           This is one of the places where the rules are enforced.'''
         global state, card, pscore, preserve, filled, tscore, dice
         self.options[0].configure(state='normal')
         self.options[1].configure(state='normal')
@@ -1090,7 +1195,7 @@ class App:
 	#}
 
     def doWinner(self):
-            if speak:
+            if config.speak:
                 talktome('%s! You are the big whiner, I mean winner!'%self.player)
             suf=Ttk.Toplevel()
             winner=Ttk.Button(suf,text='!!! %s wins !!!'%self.player,font=('Courier',44),command=sys.exit)
@@ -1466,7 +1571,7 @@ class App:
         done.bind('<Button-3>', self.spekTherules)
 
     def spekTherules(self,event):
-        if speak:
+        if config.speak:
             talktome(therules)
     
     def dismissHelp(self):
@@ -1503,7 +1608,11 @@ class App:
         self.commands['gmenu1']=self.gamemenu.entrycget(1,'command')
         self.gamemenu.entryconfig(1,command=self.helpgoal)
         self.commands['gmenu2']=self.gamemenu.entrycget(2,'command')
-        self.gamemenu.entryconfig(2,command=self.helpQuit)
+        self.gamemenu.entryconfig(2,command=self.helpSave)
+        self.commands['gmenu3']=self.gamemenu.entrycget(3,'command')
+        self.gamemenu.entryconfig(3,command=self.helpConfig)
+        self.commands['gmenu4']=self.gamemenu.entrycget(4,'command')
+        self.gamemenu.entryconfig(4,command=self.helpQuit)
         self.commands['hmenu0']=self.helpmenu.entrycget(0,'command')
         self.helpmenu.entryconfig(0,command=self.helphelp)
         self.commands['hmenu1']=self.helpmenu.entrycget(1,'command')
@@ -1526,7 +1635,9 @@ class App:
         # menu options
         self.gamemenu.entryconfig(0,command=self.addplayerGui)
         self.gamemenu.entryconfig(1,command= self.resetgoal)
-        self.gamemenu.entryconfig(2,command= sys.exit)
+        self.gamemenu.entryconfig(2,command= self.savegame)
+        self.gamemenu.entryconfig(3,command= self.writeConfig)
+        self.gamemenu.entryconfig(4,command= sys.exit)
         self.helpmenu.entryconfig(0,command= self.showRules)
         self.helpmenu.entryconfig(1,command= self.showSynopsis)
         self.helpmenu.entryconfig(2,command= self.helpGui)
@@ -1591,6 +1702,26 @@ class App:
         done.pack(side=Ttk.TOP)
         self.normalGui()
 
+    def helpSave(self):
+        helpwin=Ttk.Toplevel(self.master)
+        helpwin.wm_title('Help')
+        helpt=ScrolledText(helpwin,height=8,wrap=Ttk.WORD,font=('Times',self.iFont))
+        helpt.pack(side=Ttk.TOP)
+        helpt.insert(Ttk.END,saveHelp)
+        done=Ttk.Button(helpwin,text='Dismiss',command=helpwin.destroy)
+        done.pack(side=Ttk.TOP)
+        self.normalGui()
+
+    def helpConfig(self):
+        helpwin=Ttk.Toplevel(self.master)
+        helpwin.wm_title('Help')
+        helpt=ScrolledText(helpwin,height=8,wrap=Ttk.WORD,font=('Times',self.iFont))
+        helpt.pack(side=Ttk.TOP)
+        helpt.insert(Ttk.END,rcFileHelp)
+        done=Ttk.Button(helpwin,text='Dismiss',command=helpwin.destroy)
+        done.pack(side=Ttk.TOP)
+        self.normalGui()
+
     def helphelp(self):
         '''display help info'''
         helpwin=Ttk.Toplevel(self.master)
@@ -1614,6 +1745,7 @@ class App:
 
     def setIfont(self, event):
         self.instructionbox.configure(font=('Helvetica', 22))
+        #self.instructionbox.configure(font=('DejaVu Sans', 22))
 
     def setDebug(self, event):
         global debug
@@ -1642,7 +1774,10 @@ class App:
 
         # save the state of the current game to the file.
         write_state([self.pui[ii].player for ii in self.names], deck.deck, self.player, int(self.goal.cget('text')))
-
+    def writeConfig(self):
+        config.fontsize=self.iFont
+        config.writeRC(self.names, int(self.goal.cget('text')))
+ 
 class Die:
     """
     Display dice as a set of buttons painted by an image.
@@ -1702,6 +1837,12 @@ class Pui():
         self.nbut.bind('<Key-R>', self.deleteMe)
         self.scoreb.pack(side=Ttk.TOP,fill=Ttk.BOTH)
         self.scorel.pack(side=Ttk.TOP)
+
+    def fontSize(self,size):
+        #self.scoreb.configure(font=('Times',size))
+        #self.scoreb.configure(font=('Helvetica',size))
+        self.scoreb.configure(font=('DejaVu Sans',size))
+        #print(self.scoreb.keys())
 
     def updatescore(self,score):
         """
@@ -1780,6 +1921,22 @@ def talktome(phrase):
     command='spd-say -p 50 \"%s\"'%phrase
     print(command)  #FIXPRNT
     subprocess.call(command,shell=True)
+
+def seeTableDice(dicestr='0',selected=[]):
+    # see tableDice.pov for instructions for concocting the dice description string
+    num=0
+    for cc in range(len(dicestr)):
+        sel=0
+        for ss in selected:
+            if ss==cc:
+                sel=1
+                break
+        num=num*14 + int(dicestr[cc])+7*sel
+    print('dicestr and selected: ',dicestr,selected, ' => num, ',num)
+    command1= '(cd Dice/POV;povray +H%d +W%d -GA -D +A +K%d tableDice.pov)'%(dtw,dtw*1.333,num)
+    command2= 'convert Dice/POV/tableDice.png tableDice.gif'
+    subprocess.call(command1,shell=True)
+    subprocess.call(command2,shell=True)
 
 def message(mess,istext=False,app=None):
     if istext:
@@ -2077,16 +2234,77 @@ def readSaved(filename, debug=False):
 
     return names,scores,deck,goal,current
 
+class Config:
+    def __init__(self):
+        self.default()
+    def default(self):
+        self.goal=0
+        self.defaultnames=[]
+        self.gui=True
+        self.speak=False
+        self.dicedir="Dice/POV"
+        self.carddir="Cards/Orig"
+        self.fontsize=11
+        self.POV=True
+    def readRC(self,rcFile):
+        for line in rcFile:
+            sline=line.strip().split()
+            #print(sline)
+            if sline[0] == 'FONT_SIZE':
+                self.fontsize=int(sline[1])
+            if sline[0] == 'WINNING_SCORE':
+                self.goal=int(sline[1])
+            if sline[0] == 'DICE_DIR':
+                self.dicedir=(sline[1])
+            if sline[0] == 'CARDS_DIR':
+                self.carddir=(sline[1])
+            if sline[0] == 'GUI':
+                try:
+                    self.gui = True if sline[1].upper() == "TRUE" else False
+                except IndexError:
+                    self.gui=True
+            if sline[0] == 'PLAYER':
+                self.defaultnames.append(sline[1])
+            if sline[0] == 'POV':
+                try:
+                    self.POV = True if sline[1].upper() == "TRUE" else False
+                except IndexError:
+                    self.POV=True
+            if sline[0] == 'SPEAK':
+                try:
+                    self.speak = True if sline[1].upper() == "TRUE" else False
+                except IndexError:
+                    self.speak=True
+    def writeRC(self, names=None, goal=-1, rcFile=None):
+        if rcFile == None:
+            rcFile = os.path.expanduser('~')+'/.fillrbustrc'
+
+        try:
+            confile=open(rcFile, 'w')
+            #confile.close()
+        except:
+            print(rcFile, " not writeable as fillrbust config file")
+            confile=sys.stdout
+        confile.write( "WINNING_SCORE %d\n"%(self.goal if goal < 0 else goal))
+        confile.write( "DICE_DIR %s\n"%self.dicedir)
+        confile.write( "CARDS_DIR %s\n"%self.carddir)
+        for each in (self.defaultnames if names==None else names):
+            confile.write( "PLAYER %s\n"%each)
+        confile.write( "FONT_SIZE %d\n"%(self.fontsize))
+        confile.write( "GUI")
+        confile.write( " True\n") if self.gui else confile.write(" False\n")
+        confile.write( "POV")
+        confile.write( " True\n") if self.POV else confile.write(" False\n")
+        confile.write( "SPEAK")
+        confile.write( " True\n") if self.speak else confile.write(" False\n")
+
 if __name__ == '__main__':
     import os,sys,getopt
+    from PIL import Image
     
-    winningScore=0
-    defaultnames=[]
-    gui=True
-    speak=False
-    dicedir="."
-    carddir="."
-    #dicedir="Dice/FreeCad"
+    config = Config()
+    dtw=130
+    #print(config)
 
     def Usage():
         print('Fill\'RBust')
@@ -2096,6 +2314,10 @@ if __name__ == '__main__':
         print('    -p name	add player')
         print('    multiple players are typically specified.')
         print('    -t		don\'t use graphical user interface')
+        print('    -D dir       find dice images in Dice/dir')
+        print('    -C dir      	find card images in Cards/dir')
+        print('    -R		don\'t use config file')
+        print('    -P		don\'t render dice with POVray')
 
     def check_response(response):
         ''' response to set of dice to keep should be a set of integers
@@ -2112,9 +2334,17 @@ if __name__ == '__main__':
             else:
                 return False
         return True
+    
+    #import os
+    home=os.path.expanduser('~')
+    try:
+        configs= open(home+"/.fillrbustrc",'r')
+        config.readRC(configs)
+    except FileNotFoundError:
+        print("failed reading config file from ", home+"/.fillrbustrc")
 
     try:
-        options, args=getopt.getopt(sys.argv[1:],'dtm:p:TGsr:D:C:')
+        options, args=getopt.getopt(sys.argv[1:],'dtm:p:TGsr:D:C:RP')
     except getopt.GetoptError:
         print('Caught getopt.GetoptError')
         Usage()
@@ -2136,32 +2366,41 @@ if __name__ == '__main__':
             gtesting=True
             print('!!!!!!!!!!!!!!!\n\n G option for testing GUI\n\n!!!!!!!!!!!!!!!!\n')
         elif opt == '-m':
-            winningScore=int(par)
+            config.goal=int(par)
         elif opt == '-p':
             names.append(par)
             scores.append(0)
         elif opt == '-t':
-            gui=False
+            config.gui=False
         elif opt == '-s':
-            speak=True
+            config.speak=True
         elif opt == '-r':
             resumename=par
             resumeGame=True
         elif opt == '-D':
-            dicedir="Dice/%s"%par
+            config.dicedir="Dice/%s"%par
         elif opt == '-C':
-            carddir="Cards/%s"%par
+            config.carddir="Cards/%s"%par
+            dtw=Image.open('%s/title.gif'%config.carddir).size[1]*1.333
+            print ('table dice width should be %d'%dtw)
+        elif opt == '-R':
+            config=Config()
+        elif opt == '-P':
+            config.POV = False
     tscore=0
     filled=0
     current=""
     if resumeGame:
-        names,scores,cards,winningScore,current=readSaved(resumename)
+        names,scores,cards,config.goal,current=readSaved(resumename)
 
-    if gui:
+    if config.gui:
         root = Ttk.Tk()
         root.title("Fill\'RBust")
+        if config.POV: seeTableDice()
 
-        app = App(root,names=names,goal=winningScore, scores=scores, current=current)
+        if len(names) == 0: names=config.defaultnames
+        #app = App(root,names=names,goal=config.winningScore, scores=scores, current=current)
+        app = App(root,names=names,config=config, scores=scores, current=current)
 
         root.mainloop()
     else:
@@ -2171,7 +2410,7 @@ if __name__ == '__main__':
         # assemble players
         players={}
         if len(names)==0:
-            names=defaultnames
+            names=config.defaultnames
         for player in names:
             if player[:2]=='ai':
                 fact=player[-1]
@@ -2187,7 +2426,7 @@ if __name__ == '__main__':
         leadingPlayers=deepcopy(names)
     
         # play the game until someone wins
-        while maxScore < winningScore:
+        while maxScore < config.goal:
             for player in names:
                 tscore=playserial(player)
                 print('%s score is %d'%(player,players[player].score))

@@ -2,6 +2,6 @@
 Version=1.0
 Type=Application
 Name=FillRBust
-Exec=/home/clyde/FillRBust/Python3/goFillrbust
+Exec=/home/clyde/FillRBust/goFillrbust
 Icon=/home/clyde/FillRBust/deck.gif
 Categories=Graphics;Game
