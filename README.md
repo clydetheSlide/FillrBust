@@ -1,4 +1,4 @@
-#FillRBust
+# FillRBust
 FillRBust is a card and dice game I have enjoyed with real cards and dice.
 As a silly exercize I captured the process of playing it in a Python script.
 Initially it was just a text driven game, but the exercize grew into a project.
