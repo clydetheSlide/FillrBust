@@ -32,7 +32,13 @@ and spd-say to translate text to speech.
 From the command line, without any parameters, without a config file, ie
 > <prompt\> ./fillrbust.py
 
-the user will see a start-up screen
+Templates for run scripts are provided for Linux and Windows:
+
+- goFillrbust
+- goFillrbust.bat
+
+
+When the script runs, the user will see a start-up screen
 
 ![Start-up screen](README_dir/intStart.gif)
 
