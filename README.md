@@ -28,7 +28,7 @@ It uses several modules:
 It has options for using POVray to generate images of a set of dice,
 and spd-say to translate text to speech.
 
-# Running the code
+## Running the code
 From the command line, without any parameters, without a config file, ie
 > <prompt\> ./fillrbust.py
 
@@ -58,3 +58,15 @@ After turning over a card and rolling the dice, one would be presented with a sc
 ![initial game screen](README_dir/playing.gif)
 
 Rules of the game and instructions on how to use the graphical user interface to play it are available from the 'Help' menu. 
+
+## Speech and dice rendering options
+
+`fillrbust.py` has a mechanism to render an image of the rolled dice using POVray.
+The command line option, `-P`, will turn that on.
+POVray is available for many platforms.
+Installation is left to you the user.
+When you have it installed, set the path to it in the method, seeTableDice.
+
+`fillrbust.py` has a mechanism to speak the commands to you using a text to speech engine.
+Installation on your platform is left to you.
+When it is installed, set the path to it in the method, talktome.
