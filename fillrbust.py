@@ -58,6 +58,10 @@
 #       o look in home directory for config file
 #    Change font size of user scores along with instructions
 #    if table dice image option not chosen, don't make canvas for it
+#  v4.1 - Apr 7, 2022
+#       o add actuators to player dialog
+#         that set AI and risk
+#       o add mechanism to toggle speak on the fly
 #  dev:
 #  TODO:
 #    FIX ai play when aiName is first player
@@ -74,6 +78,7 @@
 #       o group retained dice seperately
 #       o draw thrown dice in a group other than a (boring) row
 #    change Card and Dice image family on the fly
+#    change table Dice rendering on the fly
 
 import random
 from collections import OrderedDict
@@ -468,7 +473,7 @@ diceRegions.append(DiceRegion(4,  0.158, 0.161,    0.365, 0.006))
 diceRegions.append(DiceRegion(5,  0.415, 0.223,    0.644, 0.012))
 diceRegions.append(DiceRegion(6,  0.139, 0.619,    0.390, 0.378))
 
-class App:
+class App:  # {
     #def __init__(self, master,names=[],goal=0, scores=[], current=""):
     def __init__(self, master,names=[],config=None, scores=[], current=""):
         ''' init process is to set the goal score and the players'''
@@ -498,6 +503,13 @@ class App:
         entrplay.pack(side=Ttk.LEFT)
         entrplay.bind('<Key-Return>',self.addplay)
         self.listplay=Ttk.StringVar()
+        self.human=True
+        self.aiorhuman = Ttk.Button(self.b1,text='AI',command=self.tobeornottobe)
+        self.riskt=Ttk.StringVar()
+        self.airisk=Ttk.Entry(self.b1,width=1,textvariable=self.riskt,state=Ttk.DISABLED)
+        self.aiorhuman.pack()
+        self.airisk.pack()
+
         self.playlist=Ttk.Listbox(suf,height=5,width=16, \
            listvariable=self.listplay)
         self.goplay=Ttk.Button(suf,text='Go Play', command=self.startplay)
@@ -508,9 +520,20 @@ class App:
         for each in names:
             self.playlist.insert(Ttk.END,each)
         return suf
+    def tobeornottobe(self, event=None):
+        self.human = not self.human
+        if self.human:
+            self.aiorhuman.configure(relief=Ttk.RAISED)
+            self.airisk.configure(state=Ttk.DISABLED)
+        else:
+            self.aiorhuman.configure(relief=Ttk.SUNKEN)
+            self.airisk.configure(state=Ttk.NORMAL)
     def addplay(self, event):
         eent=self.play2.get()
         #print('add: ',eent)
+        if not self.human:
+            eent='ai'+eent+self.airisk.get()
+            self.tobeornottobe(self)
         self.playlist.insert(Ttk.END,eent)
         self.play2.set('')
     def startplay(self, names=[],goal=None,scores=[],current=""):
@@ -678,11 +701,15 @@ class App:
         self.instructionbox.pack(fill=Ttk.BOTH, expand=1)
         self.instructionbox.insert(Ttk.END, "Hey %s, It is your turn."%self.player)
         self.instructionbox.insert(Ttk.END, "\n Draw a card.")
+        if config.speak:
+            talktome('Hey %s, It is your turn. Draw a card.'%self.player)
+            #talktome("Draw a card.")
         self.master.bind('<Key-i>', self.inspectW)
         self.master.bind('<Key->>', self.fontUp)
         self.master.bind('<Key-less>', self.fontDn)
         self.master.bind('<Key-R>', self.deScore)
         self.master.bind('<Key-c>', self.cheat)
+        self.master.bind('<Key-S>', config.toggleTalk)
 
     def deScore(self,event=None):
         '''reset scores'''
@@ -803,7 +830,9 @@ class App:
             self.leadingPlayers=[name]
             if formerHi[0] != name:
                 #print('New max score %d\nformer leader, %s, supplanted by %s'%(self.maxScore,formerHi[0],name))
-                self.instructionbox.insert(Ttk.END, '\n With a score of %d, %s has taken the lead.'%(self.maxScore,name))
+                self.instructionbox.insert(Ttk.END, "\n With a score of %d, %s has taken the lead."%(self.maxScore,name))
+                if config.speak:
+                    talktome("With a score of %d, %s has taken the lead."%(self.maxScore,name))
         elif self.pui[name].player.score == self.maxScore:
             self.leadingPlayers.append(name)
 
@@ -891,6 +920,8 @@ class App:
         pscore,preserve,dummy=dice.scored(dlist)
         if pscore<1:
             self.instructionbox.insert(Ttk.END,'\nYou must keep enough to score someting; it\'s a rule')
+            if config.speak:
+                talktome('You must keep enough to score someting; its a rule')
             self.instructionbox.see(Ttk.END)
             dlist=[int(a) for a in range(rolled)]
             self.updatedice(dice.dice,dice.reserved,dlist)
@@ -1061,14 +1092,20 @@ class App:
             self.options[1].configure(text='         ',command=self.donothing,state='disabled')
             self.enRoll()
             self.instructionbox.insert(Ttk.END, "\n  Roll the dice.")
+            if config.speak:
+                talktome('Roll the dice.')
             self.instructionbox.see(Ttk.END)
         elif state == ROLLED:
             self.options[0].configure(text='Roll dice',command=self.rollDice)
             if card == 'Must Bust':
                 self.instructionbox.insert(Ttk.END, "\n  No risk, just roll the dice")
+                if config.speak:
+                    talktome('No risk, just roll the dice')
                 self.options[1].configure(text='       ',command=self.donothing,state='disabled')
             elif card == 'Fill 1000' or card == 'Double Trouble' or card == 'Vengeance':
                 self.instructionbox.insert(Ttk.END, "\n  You have to fill it.")
+                if config.speak:
+                    talktome("You have to fill it.")
                 self.instructionbox.insert(Ttk.END, "\n  Select the dice to keep and roll again.")
                 self.options[1].configure(text='       ',command=self.donothing,state='disabled')
             else:
@@ -1096,6 +1133,8 @@ class App:
                 self.nextplayer()
         elif state == FILLED:	#{
             self.instructionbox.insert(Ttk.END, "\n  You filled it!")
+            if config.speak:
+                talktome("You filled it!")
             filled+=1
             if card == "Must Bust":
                 # just keep rolling
@@ -1105,6 +1144,8 @@ class App:
                 self.pscoreset(pscore)
                 self.options[0].configure(text='Keep Rolling', command=self.rollDice)
                 self.options[1].configure(text='         ',command=self.donothing,state='disabled')
+                if config.speak:
+                    talktome("Keep Rolling")
                 state=ROLLFIRST
             elif card == "Vengeance":
                 # reduce leaders' scores
@@ -1160,6 +1201,8 @@ class App:
                 self.options[1].configure(text='Score',command=self.scoreNquit)
                 self.instructionbox.insert(Ttk.END, "\n  You can take this score (%d) and end your turn."%tscore)
                 self.instructionbox.insert(Ttk.END, "\n  or risk this score and draw another card.")
+                if config.speak:
+                    talktome("You can take this %d points and end your turn or risk it and draw another card."%tscore)
                 self.instructionbox.see(Ttk.END)
             elif 'Bonus' in card:
                 tscore+=pscore+int(card[5:])
@@ -1170,6 +1213,8 @@ class App:
                 self.options[1].configure(text='Score',command=self.scoreNquit)
                 self.instructionbox.insert(Ttk.END, "\n  You can take this score (%d) and end your turn."%tscore)
                 self.instructionbox.insert(Ttk.END, "\n  or risk this score and draw another card.")
+                if config.speak:
+                    talktome("You can take this %d points and end your turn or risk it and draw another card."%tscore)
             self.instructionbox.see(Ttk.END)	#}
         elif state == NEXTPLAYER:
             self.pui[self.player].setnext()
@@ -1183,7 +1228,11 @@ class App:
                 self.options[0].configure(text='         ', command=self.donothing,state='disabled')
                 self.options[1].configure(text='         ',command=self.donothing,state='disabled')
                 self.instructionbox.insert(Ttk.END, "\n\nHey %s, It is your turn."%self.player)
+                if config.speak:
+                    talktome("Hey %s, It is your turn."%self.player)
                 self.instructionbox.insert(Ttk.END, "\n Draw a card.")
+                if config.speak:
+                    talktome("Draw a card.")
                 self.instructionbox.see(Ttk.END)
                 state= DRAWCARD
                 self.setoptions()
@@ -1213,7 +1262,6 @@ class App:
             longer.bind('<Button-1>', self.goLongerb)
             #print(suf.winfo_children())  #FIXPRNT
             #print(winner)  #FIXPRNT
-        #}
 
     def goLongerb(self,event):
         #called by button in frame in popup
@@ -1238,10 +1286,14 @@ class App:
         self.enRoll()
         self.deRoll()
         self.instructionbox.insert(Ttk.END, "\n\nHey %s, It is your turn."%self.names[0])
+        if config.speak:
+            talktome("Hey %s, It is your turn."%self.names[0])
         self.pui[self.player].shownotnext()
         self.player=self.names[0]
         self.pui[self.player].setnext()
         self.instructionbox.insert(Ttk.END, "\n Draw a card.")
+        if config.speak:
+            talktome("Draw a card.")
         #called by button in frame in popup
         event.widget.master.master.destroy()
         state=DRAWCARD
@@ -1778,6 +1830,7 @@ class App:
     def writeConfig(self):
         config.fontsize=self.iFont
         config.writeRC(self.names, int(self.goal.cget('text')))
+    # } # end of class App
  
 class Die:
     """
@@ -1914,13 +1967,15 @@ class Pui():
                 self.parent.pui[self.parent.player].setnext()
                 self.parent.state=NEXTPLAYER
                 self.parent.instructionbox.insert(Ttk.END, " Hey %s, draw a card\n"%(self.parent.player))
+                if config.speak:
+                    talktome("Hey %s, draw a card."%(self.parent.player))
                 self.parent.master.update()
                 self.parent.setoptions()
             self.renamef.destroy()
 
 def talktome(phrase):
     command='spd-say -p 50 \"%s\"'%phrase
-    print(command)  #FIXPRNT
+    if debug: print(command)  #FIXPRNT
     subprocess.call(command,shell=True)
 
 def seeTableDice(dicestr='0',selected=[]):
@@ -2299,6 +2354,8 @@ class Config:
         confile.write( " True\n") if self.POV else confile.write(" False\n")
         confile.write( "SPEAK")
         confile.write( " True\n") if self.speak else confile.write(" False\n")
+    def toggleTalk(self, dummy=None):
+        self.speak = not self.speak
 
 if __name__ == '__main__':
     import os,sys,getopt

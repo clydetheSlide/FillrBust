@@ -1,4 +1,5 @@
 [Desktop Entry]
+# put me in ~/.local/share/applications
 Version=1.0
 Type=Application
 Name=FillRBust
