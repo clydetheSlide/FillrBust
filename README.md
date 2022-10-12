@@ -37,6 +37,10 @@ Templates for run scripts are provided for Linux and Windows:
 - goFillrbust
 - goFillrbust.bat
 
+An XFCE desktop shortcut file is provided as FillRBust.desktop.
+The user must edit it to set the appropriate paths for the run script
+and desktop icon.
+
 
 When the script runs, the user will see a start-up screen
 
@@ -67,6 +71,8 @@ POVray is available for many platforms.
 Installation is left to you the user.
 When you have it installed, set the path to it in the method, seeTableDice.
 
-`fillrbust.py` has a mechanism to speak the commands to you using a text to speech engine.
+`fillrbust.py` has a mechanism to speak the commands to you using a text-to-speech engine if that software is on your computer.
+The command line option, `-s`, will turn that on.
+Typing 's' in the instruction pane will toggle that option as well.
 Installation on your platform is left to you.
 When it is installed, set the path to it in the method, talktome.

@@ -63,6 +63,7 @@
 #         that set AI and risk
 #       o add mechanism to toggle speak on the fly
 #  dev:
+#    change table Dice rendering on the fly
 #  TODO:
 #    FIX ai play when aiName is first player
 #       - only problem is first play; does not run ai.
@@ -78,7 +79,6 @@
 #       o group retained dice seperately
 #       o draw thrown dice in a group other than a (boring) row
 #    change Card and Dice image family on the fly
-#    change table Dice rendering on the fly
 
 import random
 from collections import OrderedDict
@@ -1169,9 +1169,12 @@ class App:  # {
                 self.setoptions()
             elif card == "Double Trouble":
                 # must fill it two times
-                if filled==2:
+                #if filled==2:
+                if filled>1:
                     # count double the score and get a new turn
                     self.instructionbox.insert(Ttk.END, "\n  You filled it twice!")
+                    if config.speak:
+                        talktome("You filled it twice!")
                     player=self.player
                     self.updatescore(player,tscore+pscore)
                     #self.updatescore(player,dice.score*2)
@@ -1228,11 +1231,9 @@ class App:  # {
                 self.options[0].configure(text='         ', command=self.donothing,state='disabled')
                 self.options[1].configure(text='         ',command=self.donothing,state='disabled')
                 self.instructionbox.insert(Ttk.END, "\n\nHey %s, It is your turn."%self.player)
-                if config.speak:
-                    talktome("Hey %s, It is your turn."%self.player)
                 self.instructionbox.insert(Ttk.END, "\n Draw a card.")
                 if config.speak:
-                    talktome("Draw a card.")
+                    talktome("Hey %s, It is your turn.Draw a card."%self.player)
                 self.instructionbox.see(Ttk.END)
                 state= DRAWCARD
                 self.setoptions()
@@ -1287,13 +1288,11 @@ class App:  # {
         self.deRoll()
         self.instructionbox.insert(Ttk.END, "\n\nHey %s, It is your turn."%self.names[0])
         if config.speak:
-            talktome("Hey %s, It is your turn."%self.names[0])
+            talktome("Hey %s, It is your turn.Draw a card."%self.names[0])
         self.pui[self.player].shownotnext()
         self.player=self.names[0]
         self.pui[self.player].setnext()
         self.instructionbox.insert(Ttk.END, "\n Draw a card.")
-        if config.speak:
-            talktome("Draw a card.")
         #called by button in frame in popup
         event.widget.master.master.destroy()
         state=DRAWCARD
@@ -2447,7 +2446,8 @@ if __name__ == '__main__':
         elif opt == '-R':
             config=Config()
         elif opt == '-P':
-            config.POV = False
+            #config.POV = False
+            config.POV = True
     tscore=0
     filled=0
     current=""
