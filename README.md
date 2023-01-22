@@ -70,6 +70,9 @@ The command line option, `-P`, will turn that on.
 POVray is available for many platforms.
 Installation is left to you the user.
 When you have it installed, set the path to it in the method, seeTableDice.
+This is an example screen with the rendered table of dice.
+
+![initial game screen](README_dir/povExample.gif)
 
 `fillrbust.py` has a mechanism to speak the commands to you using a text-to-speech engine if that software is on your computer.
 The command line option, `-s`, will turn that on.
